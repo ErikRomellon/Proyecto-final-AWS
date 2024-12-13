@@ -16,8 +16,8 @@ app = FastAPI()
 AWS_ACCESS_KEY_ID = ""
 AWS_SECRET_ACCESS_KEY = "" # Reemplaza con tus credenciales de AWS
 AWS_SESSION_TOKEN = "" # Reemplaza con tus credenciales de AWS
-AWS_BUCKET_NAME = "" # Reemplaza con tu nombre de bucket
-AWS_REGION = "" # Reemplaza con tu región de AWS
+AWS_BUCKET_NAME = "mi-bucket-fastapi" # Reemplaza con tu nombre de bucket
+AWS_REGION = "us-east-1" # Reemplaza con tu región de AWS
 
 SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:340185244786:mi-topic-2" # Reemplaza con el ARN de tu tópico de SNS
 DYNAMODB_TABLE_NAME = "sesiones-alumnos" # Reemplaza con el nombre de tu tabla de DynamoDB
@@ -40,16 +40,14 @@ sns_client = boto3.client(
     region_name=AWS_REGION,
 )
 
-# Crear cliente de DynamoDB
-dynamodb_client = boto3.client(
+# Crear recurso de DynamoDB
+dynamodb_resource = boto3.resource(
     "dynamodb",
     aws_access_key_id=AWS_ACCESS_KEY_ID,
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-    region_name=AWS_REGION,
     aws_session_token=AWS_SESSION_TOKEN,
+    region_name=AWS_REGION,
 )
-
-table = dynamodb_client.Table(DYNAMODB_TABLE_NAME)
 
 # Listar buckets de S3
 response = s3_client.list_buckets()
@@ -203,7 +201,7 @@ async def login(id: int, password: str, db: Session = Depends(get_db)):
     timestamp = int(time.time())
 
     try:
-        dynamodb_client.put_item(
+        dynamodb_resource.put_item(
             TableName=DYNAMODB_TABLE_NAME,
             Item={
                 "id": {"S": session_id},
@@ -218,11 +216,10 @@ async def login(id: int, password: str, db: Session = Depends(get_db)):
 
     return {"sessionString": session_string}
 
-
 @app.post("/alumnos/{id}/session/verify")
 async def verify_session(id: int, session_string: str):
     try:
-        response = dynamodb_client.scan(
+        response = dynamodb_resource.scan(
             TableName=DYNAMODB_TABLE_NAME,
             FilterExpression="alumnoId = :id AND sessionString = :sessionString",
             ExpressionAttributeValues={
@@ -246,7 +243,7 @@ async def verify_session(id: int, session_string: str):
 @app.post("/alumnos/{id}/session/logout")
 async def logout(id: int, session_string: str):
     try:
-        response = dynamodb_client.scan(
+        response = dynamodb_resource.scan(
             TableName=DYNAMODB_TABLE_NAME,
             FilterExpression="alumnoId = :id AND sessionString = :sessionString",
             ExpressionAttributeValues={
@@ -260,7 +257,7 @@ async def logout(id: int, session_string: str):
 
         # Actualizar el estado de la sesión a inactiva
         session_id = response["Items"][0]["id"]["S"]
-        dynamodb_client.update_item(
+        dynamodb_resource.update_item(
             TableName=DYNAMODB_TABLE_NAME,
             Key={"id": {"S": session_id}},
             UpdateExpression="SET active = :inactive",
